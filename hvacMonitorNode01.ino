@@ -11,8 +11,9 @@ OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
 DeviceAddress ds18b20house = { 0x28, 0xFF, 0x35, 0x11, 0x01, 0x16, 0x04, 0x25 }; // House temperature probe
+DeviceAddress ds18b20attic = { 0x28, 0xC6, 0x89, 0x1E, 0x00, 0x00, 0x80, 0xAA }; // Attic temperature probe
 
-char auth[] = "fromBlynkApp(04)";
+char auth[] = "fromBlynkApp";
 
 int buzzerPin = 0;
 
@@ -25,6 +26,7 @@ void setup()
 
   sensors.begin();
   sensors.setResolution(ds18b20house, 10);
+  sensors.setResolution(ds18b20attic, 10);
 
   timer.setInterval(2000L, sendTemps); // Temperature sensor polling interval
   timer.setInterval(2000L, sendStatus); // Maybe alter setInterval to something else so it doesn't hammer the notification app... look at http://playground.arduino.cc/Code/SimpleTimer
@@ -34,8 +36,25 @@ void sendTemps()
 {
   sensors.requestTemperatures(); // Polls the sensors
   float tempHouse = sensors.getTempF(ds18b20house);
+  float tempAttic = sensors.getTempF(ds18b20attic);  
 
-  Blynk.virtualWrite(3, tempHouse);
+  if (tempHouse >= 30 && tempHouse <= 120)
+  {
+    Blynk.virtualWrite(3, tempHouse); // Original code
+  }
+  else
+  {
+    Blynk.virtualWrite(3, "ERR");
+  }
+
+  if (tempAttic >= 0) // Different than above due to very high attic temps
+  {
+    Blynk.virtualWrite(7, tempAttic);
+  }
+  else
+  {
+    Blynk.virtualWrite(7, "ERR");
+  } 
 }
 
 void sendStatus()
