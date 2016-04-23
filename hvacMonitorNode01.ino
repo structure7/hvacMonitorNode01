@@ -13,11 +13,13 @@ DallasTemperature sensors(&oneWire);
 DeviceAddress ds18b20house = { 0x28, 0xFF, 0x35, 0x11, 0x01, 0x16, 0x04, 0x25 }; // House temperature probe
 DeviceAddress ds18b20attic = { 0x28, 0xC6, 0x89, 0x1E, 0x00, 0x00, 0x80, 0xAA }; // Attic temperature probe
 
-char auth[] = "fromBlynkApp";
+char auth[] = "fromBlynkApp *04";
 
 int buzzerPin = 0;
 
 SimpleTimer timer;
+
+WidgetLED led1(V11);
 
 void setup()
 {
@@ -30,6 +32,7 @@ void setup()
 
   timer.setInterval(2000L, sendTemps); // Temperature sensor polling interval
   timer.setInterval(2000L, sendStatus); // Maybe alter setInterval to something else so it doesn't hammer the notification app... look at http://playground.arduino.cc/Code/SimpleTimer
+  timer.setInterval(5000L, sendHeartbeat); // Blinks Blynk LED to reflect online status
 }
 
 void sendTemps()
@@ -55,6 +58,12 @@ void sendTemps()
   {
     Blynk.virtualWrite(7, "ERR");
   } 
+  led1.off();  
+}
+
+void sendHeartbeat()
+{
+  led1.on();
 }
 
 void sendStatus()
