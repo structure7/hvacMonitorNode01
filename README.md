@@ -1,6 +1,6 @@
 # hvacMonitorNode01
 <p align="center"><img src="http://i.imgur.com/AhJXoua.jpg"/></p>
-<br>
+Bonus points if you can spot the DS18B20!
 ## Libraries and Resources
 
 Title | Include | Link | w/ IDE?
