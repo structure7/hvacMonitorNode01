@@ -18,12 +18,14 @@ char auth[] = "fromBlynkApp";
 
 int buzzerPin = 0;  // ESP-01 GPIO 0
 int alarmLatch = 0;
-int dayCountLatch = 0;
-int alarmTimer, dailyHigh, dailyLow, nowTemp, todaysDate, yMonth, yDate, yYear;
+int dailyHigh = 0; // Kicks of with overly low high
+int dailyLow = 200; // Kicks of with overly high low
+int alarmTimer, dailyHighAttic, yHigh, yLow, yHighAttic, yMonth, yDate, yYear;
+float tempHouse, tempAttic;
 
 SimpleTimer timer;
 
-WidgetLED led1(V11);
+WidgetLED led1(V11); // Heartbeat
 WidgetRTC rtc;
 BLYNK_ATTACH_WIDGET(rtc, V8);
 
@@ -31,68 +33,73 @@ void setup()
 {
   Serial.begin(9600);
   Blynk.begin(auth, "ssid", "pw");
+  
+  while (Blynk.connect() == false) {
+    // Wait until connected
+  }
 
   sensors.begin();
   sensors.setResolution(ds18b20house, 10);
   sensors.setResolution(ds18b20attic, 10);
-
-  while (Blynk.connect() == false) {
-    // Wait until connected
-  }
+  
   rtc.begin();
 
   timer.setInterval(2000L, sendTemps); // Temperature sensor polling interval
-  timer.setInterval(1000L, hiLoTemps);
   timer.setInterval(1000L, sendAlarmStatus);
   timer.setInterval(5000L, sendHeartbeat); // Blinks Blynk LED to reflect online status
+  timer.setInterval(60000L, hiLoTemps);
+  timer.setInterval(1000L, setHiLoTemps);
 }
 
-void tweetHiLo() // Runs once 2 minutes after midnight. Called in hiLoTemps().
+void setHiLoTemps()
 {
-  Blynk.tweet(String("On ") + yMonth + "/" + yDate + "/" + yYear + " the house high/low temps were " + dailyHigh + "°F/" + dailyLow + "°F.");
-}
-
-void hiLoTemps()
-{
-  // Daily at 23:58 (arbitrary), "yesterday's date" is set.
-  if (hour() == 23 && minute() == 58) 
+  // Daily at 23:59, "yesterday's date" and high/low temp are recorded.
+  if (hour() == 23 && minute() == 59 && second() == 59)
   {
     yMonth = month();
     yDate = day();
     yYear = year();
-  }
-
-  // Sets the date once after reset/boot up, or when the date actually changes.
-  if (dayCountLatch == 0)
-  {
-    todaysDate = day();
-    dayCountLatch++;
-  }
-
-  // Records the high and low temperature. Love how simple this is.
-  if (todaysDate == day())
-  {
-       if (nowTemp > dailyHigh)
-      {
-         dailyHigh = nowTemp;
-      }
-   else if (nowTemp < dailyLow)
-      {
-         dailyLow = nowTemp;
-      }
-  }
-  else if (todaysDate != day())
-  {
+    yHigh = dailyHigh;
+    yLow = dailyLow;
+    yHighAttic = dailyHighAttic;
+    dailyHigh = 0; // Resets daily high temp
+    dailyLow = 200; // Resets daily low temp
+    dailyHighAttic = 0; // Resets attic daily high temp
     timer.setTimeout(120000L, tweetHiLo); // Tweet hi/lo temps 2 minutes after midnight
-    dayCountLatch = 0; // Allows today's date to be reset.
   }
+}
+
+void hiLoTemps()
+{
+  if (tempHouse > dailyHigh)
+  {
+    dailyHigh = tempHouse;
+    Blynk.virtualWrite(22, dailyHigh);
+  }
+  
+  if (tempHouse < dailyLow)
+  {
+    dailyLow = tempHouse;
+    Blynk.virtualWrite(23, dailyLow);
+  }
+
+    if (tempAttic > dailyHighAttic)
+  {
+    dailyHighAttic = tempAttic;
+    Blynk.virtualWrite(24, dailyHighAttic);
+  }
+}
+
+void tweetHiLo() // Runs once 2 minutes after midnight. Called in hiLoTemps().
+{
+  Blynk.tweet(String("On ") + yMonth + "/" + yDate + "/" + yYear + " the house high/low temps were " + yHigh + "°F/" + yLow + "°F. Attic high was" + yHighAttic + "°F.");
 }
 
 void sendTemps()
 {
   sensors.requestTemperatures(); // Polls the sensors
-  float tempHouse = sensors.getTempF(ds18b20house);
-  float tempAttic = sensors.getTempF(ds18b20attic);
+  tempHouse = sensors.getTempF(ds18b20house);
+  tempAttic = sensors.getTempF(ds18b20attic);
 
   if (tempHouse >= 30 && tempHouse <= 120)
   {
