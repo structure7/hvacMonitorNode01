@@ -2,6 +2,11 @@
 <p align="center"><img src="http://i.imgur.com/WPQASBv.jpg"/></p>
 <p align="center"><img src="http://i.imgur.com/AhJXoua.jpg"/></p>
 Bonus points if you can spot the DS18B20!<br>
+## Features
+* This
+* That
+* The other
+
 ## Libraries and Resources
 
 Title | Include | Link | w/ IDE?
