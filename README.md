@@ -2,14 +2,14 @@
 The project idea that got me started in Arduino... a way to get a notification on my phone if my security alarm went off. It morphed into also a handful of temperature sensors.
 <p align="center"><img src="http://i.imgur.com/WPQASBv.jpg"/></p>
 <p align="center"><img src="http://i.imgur.com/AhJXoua.jpg"/></p>
-Bonus points if you can spot the DS18B20!<p>
+Bonus points if you can spot the DS18B20!
 ## Hardware
 * ESP-8266 (ESP-01... the tiny one)
 * Two DS18B20 temperature sensors (one in attic, one in the house thermostat)
 
 ## Features
 * Monitors a Broadview security alarm panel (details below) and notifies my mobile device when an alarm is triggered.
-* Tweets the house's daily high and low temperature, and the attic's daily high temperature.<p>
+* Tweets the house's daily high and low temperature, and the attic's daily high temperature.
 
 ## Security Alarm Panel Monitoring
 Almost every new home security system includes the ability to receive notifications on your mobile device, as well as remotely arm/disarm the system and more. I just wanted to receive a text if the alarm went off. My security company quoted me about $700 to replace the panels and keypads to support this. I did it for $3.<p>
