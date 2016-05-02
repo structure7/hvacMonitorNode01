@@ -5,13 +5,12 @@ The project idea that got me started in Arduino... a way to get a notification o
 Bonus points if you can spot the DS18B20!<br>
 ## Hardware
 * ESP-8266 (ESP-01... the tiny one)
-* Two DS18B20 temperature sensors (one in attic, one in the house thermostat)
+* Two DS18B20 temperature sensors (one in attic, one in the house thermostat)<br>
 ## Features
 * Monitors a Broadview security alarm panel (details below) and notifies my mobile device when an alarm is triggered.
-* Tweets the house's daily high and low temperature, and the attic's daily high temperature.
+* Tweets the house's daily high and low temperature, and the attic's daily high temperature.<br>
 ## Security Alarm Panel Monitoring
-Almost every new home security system includes the ability to receive notifications on your mobile device, as well as remotely arm/disarm the system and more. I just wanted to receive a text if the alarm went off. My security company quoted me about $700 to replace the panels and keypads to support this. I did it for $3.
-
+Almost every new home security system includes the ability to receive notifications on your mobile device, as well as remotely arm/disarm the system and more. I just wanted to receive a text if the alarm went off. My security company quoted me about $700 to replace the panels and keypads to support this. I did it for $3.<br>
 My home's main alarm panel is a mess of wires connected to an uninviting, large circuit board. After doing some research, I found my particular model of alarm was not "open source," friendly to being hacked, or compatible with modules and devices intended to add remote control and notifications.
 ## Libraries and Resources
 
