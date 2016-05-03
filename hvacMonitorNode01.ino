@@ -18,9 +18,11 @@ char auth[] = "fromBlynkApp";
 
 int buzzerPin = 0;  // ESP-01 GPIO 0
 int alarmLatch = 0;
-int dailyHigh = 0; // Kicks of with overly low high
-int dailyLow = 200; // Kicks of with overly high low
-int alarmTimer, dailyHighAttic, yHigh, yLow, yHighAttic, yMonth, yDate, yYear;
+int setHiLoTempsLatch = 0;
+int dailyHigh = 0; // Kicks off with overly low high
+int dailyLow = 200; // Kicks off with overly high low
+int dailyHighAttic = 0; // Kicks off with overly low high
+int alarmTimer, yHigh, yLow, yHighAttic, yMonth, yDate, yYear;
 float tempHouse, tempAttic;
 
 SimpleTimer timer;
@@ -48,13 +50,17 @@ void setup()
   timer.setInterval(1000L, sendAlarmStatus);
   timer.setInterval(5000L, sendHeartbeat); // Blinks Blynk LED to reflect online status
   timer.setInterval(60000L, hiLoTemps);
-  timer.setInterval(1000L, setHiLoTemps);
+  timer.setInterval(5000L, setHiLoTemps);
+  
+  Blynk.virtualWrite(22, "RST");
+  Blynk.virtualWrite(23, "RST");
+  Blynk.virtualWrite(24, "RST");
 }
 
 void setHiLoTemps()
 {
   // Daily at 23:59, "yesterday's date" and high/low temp are recorded.
-  if (hour() == 23 && minute() == 59 && second() == 59)
+  if (hour() == 23 && minute() == 59 && setHiLoTempsLatch == 0)
   {
     yMonth = month();
     yDate = day();
@@ -65,7 +71,11 @@ void setHiLoTemps()
     dailyHigh = 0; // Resets daily high temp
     dailyLow = 200; // Resets daily low temp
     dailyHighAttic = 0; // Resets attic daily high temp
-    timer.setTimeout(120000L, tweetHiLo); // Tweet hi/lo temps 2 minutes after midnight
+    timer.setTimeout(240000L, tweetHiLo); // Tweet hi/lo temps about 4 minutes after midnight
+    setHiLoTempsLatch = 1; // Locks out setHiLoTemps() until Tweet is sent.
+    Blynk.virtualWrite(22, "RST");
+    Blynk.virtualWrite(23, "RST");
+    Blynk.virtualWrite(24, "RST");
   }
 }
 
@@ -90,9 +100,10 @@ void hiLoTemps()
   }
 }
 
-void tweetHiLo() // Runs once 2 minutes after midnight. Called in hiLoTemps().
+void tweetHiLo() // Runs once about 4 minutes after midnight. Called in hiLoTemps().
 {
   Blynk.tweet(String("On ") + yMonth + "/" + yDate + "/" + yYear + " the house high/low temps were " + yHigh + "°F/" + yLow + "°F. Attic high was" + yHighAttic + "°F.");
+  setHiLoTempsLatch = 0; // Re-enables setHiLoTemps()
 }
 
 void sendTemps()
