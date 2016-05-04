@@ -1,7 +1,6 @@
 # hvacMonitorNode01
 The project idea that got me started in Arduino... a way to get a notification on my phone if my security alarm went off. It morphed into also a handful of temperature sensors.
-<p align="center"><img src="http://i.imgur.com/WPQASBv.jpg"/></p>
-<p align="center"><img src="http://i.imgur.com/AhJXoua.jpg"/></p>
+<p align="center"><img src="http://i.imgur.com/7SssWXI.png"/></p>
 Bonus points if you can spot the DS18B20!
 ## Hardware
 * ESP-8266 (ESP-01... the tiny one)
