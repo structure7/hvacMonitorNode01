@@ -35,7 +35,7 @@ void setup()
 {
   Serial.begin(9600);
   Blynk.begin(auth, "ssid", "pw");
-  
+
   while (Blynk.connect() == false) {
     // Wait until connected
   }
@@ -43,7 +43,7 @@ void setup()
   sensors.begin();
   sensors.setResolution(ds18b20house, 10);
   sensors.setResolution(ds18b20attic, 10);
-  
+
   rtc.begin();
 
   timer.setInterval(2000L, sendTemps); // Temperature sensor polling interval
@@ -51,7 +51,7 @@ void setup()
   timer.setInterval(5000L, sendHeartbeat); // Blinks Blynk LED to reflect online status
   timer.setInterval(60000L, hiLoTemps);
   timer.setInterval(5000L, setHiLoTemps);
-  
+
   Blynk.virtualWrite(22, "RST");
   Blynk.virtualWrite(23, "RST");
   Blynk.virtualWrite(24, "RST");
@@ -86,14 +86,14 @@ void hiLoTemps()
     dailyHigh = tempHouse;
     Blynk.virtualWrite(22, dailyHigh);
   }
-  
+
   if (tempHouse < dailyLow)
   {
     dailyLow = tempHouse;
     Blynk.virtualWrite(23, dailyLow);
   }
 
-    if (tempAttic > dailyHighAttic)
+  if (tempAttic > dailyHighAttic)
   {
     dailyHighAttic = tempAttic;
     Blynk.virtualWrite(24, dailyHighAttic);
@@ -102,7 +102,7 @@ void hiLoTemps()
 
 void tweetHiLo() // Runs once about 4 minutes after midnight. Called in hiLoTemps().
 {
-  Blynk.tweet(String("On ") + yMonth + "/" + yDate + "/" + yYear + " the house high/low temps were " + yHigh + "°F/" + yLow + "°F. Attic high was" + yHighAttic + "°F.");
+  Blynk.tweet(String("On ") + yMonth + "/" + yDate + "/" + yYear + " the house high/low temps were " + yHigh + "°F/" + yLow + "°F. Attic high was " + yHighAttic + "°F.");
   setHiLoTempsLatch = 0; // Re-enables setHiLoTemps()
 }
 
