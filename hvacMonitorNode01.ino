@@ -48,13 +48,24 @@ void setup()
 
   timer.setInterval(2000L, sendTemps); // Temperature sensor polling interval
   timer.setInterval(1000L, sendAlarmStatus);
-  timer.setInterval(5000L, sendHeartbeat); // Blinks Blynk LED to reflect online status
+  timer.setInterval(5000L, heartbeatOn); // Blinks Blynk LED to reflect online status
   timer.setInterval(60000L, hiLoTemps);
   timer.setInterval(5000L, setHiLoTemps);
 
   Blynk.virtualWrite(22, "RST");
   Blynk.virtualWrite(23, "RST");
   Blynk.virtualWrite(24, "RST");
+}
+
+void heartbeatOn()  // Blinks a virtual LED in the Blynk app to show the ESP is live and reporting.
+{
+  led1.on();
+  timer.setTimeout(2500L, heartbeatOff);
+}
+
+void heartbeatOff()
+{
+  led1.off();  // The OFF portion of the LED heartbeat indicator in the Blynk app
 }
 
 void setHiLoTemps()
@@ -129,12 +140,6 @@ void sendTemps()
   {
     Blynk.virtualWrite(7, "ERR");
   }
-  led1.off();
-}
-
-void sendHeartbeat()
-{
-  led1.on();
 }
 
 void sendAlarmStatus()
