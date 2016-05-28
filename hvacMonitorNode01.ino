@@ -30,6 +30,7 @@ SimpleTimer timer;
 WidgetLED led1(V11); // Heartbeat
 WidgetRTC rtc;
 BLYNK_ATTACH_WIDGET(rtc, V8);
+WidgetTerminal terminal(V26);
 
 void setup()
 {
@@ -55,6 +56,25 @@ void setup()
   Blynk.virtualWrite(22, "RST");
   Blynk.virtualWrite(23, "RST");
   Blynk.virtualWrite(24, "RST");
+}
+
+BLYNK_WRITE(V27) // App button to report uptime
+{
+  int pinData = param.asInt();
+
+  if (pinData == 0)
+  {
+  timer.setTimeout(2000L, uptimeSend);
+  }
+}
+
+void uptimeSend()  // Blinks a virtual LED in the Blynk app to show the ESP is live and reporting.
+{
+  float secDur = millis() / 1000;
+  float minDur = secDur / 60;
+  float hourDur = minDur / 60;
+  terminal.println(String("Node01 (Attic/Tstat) uptime: ") + hourDur + " hours ");
+  terminal.flush();
 }
 
 void heartbeatOn()  // Blinks a virtual LED in the Blynk app to show the ESP is live and reporting.
