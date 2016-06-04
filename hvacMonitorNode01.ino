@@ -24,6 +24,7 @@ int dailyLow = 200; // Kicks off with overly high low
 int dailyHighAttic = 0; // Kicks off with overly low high
 int alarmTimer, yHigh, yLow, yHighAttic, yMonth, yDate, yYear;
 float tempHouse, tempAttic;
+int tempHouseHighAlarm = 200;
 
 SimpleTimer timer;
 
@@ -58,13 +59,48 @@ void setup()
   Blynk.virtualWrite(24, "RST");
 }
 
+BLYNK_WRITE(V30) {
+  switch (param.asInt())
+  {
+    case 1: { // Alarm Off
+        tempHouseHighAlarm = 200;
+        break;
+      }
+    case 2: { // 80F Alarm
+        tempHouseHighAlarm = 80;
+        break;
+      }
+    case 3: { // 82F Alarm
+        tempHouseHighAlarm = 82;
+        break;
+      }
+    case 4: { // 84F Alarm;
+        tempHouseHighAlarm = 84;
+        break;
+      }
+    case 5: { // 86F Alarm
+        tempHouseHighAlarm = 86;
+        break;
+      }
+    default: {
+        Serial.println("Unknown item selected");
+      }
+  }
+}
+
+void notifyAndOff()
+{
+  Blynk.notify(String("House is ") + tempHouse + "°F. Alarm disabled until reset."); // Send notification.
+  Blynk.virtualWrite(V30, 1); // Rather than fancy timing, just disable alarm until reset.
+}
+
 BLYNK_WRITE(V27) // App button to report uptime
 {
   int pinData = param.asInt();
 
   if (pinData == 0)
   {
-  timer.setTimeout(2000L, uptimeSend);
+    timer.setTimeout(2000L, uptimeSend);
   }
 }
 
@@ -73,7 +109,7 @@ void uptimeSend()  // Blinks a virtual LED in the Blynk app to show the ESP is l
   float secDur = millis() / 1000;
   float minDur = secDur / 60;
   float hourDur = minDur / 60;
-  terminal.println(String("Node01 (Attic/Tstat) uptime: ") + hourDur + " hours ");
+  terminal.println(String("Node01 (Attic/Tstat): ") + hourDur + " hours ");
   terminal.flush();
 }
 
@@ -159,6 +195,11 @@ void sendTemps()
   else
   {
     Blynk.virtualWrite(7, "ERR");
+  }
+
+  if (tempHouse >= tempHouseHighAlarm)
+  {
+    notifyAndOff();
   }
 }
 
