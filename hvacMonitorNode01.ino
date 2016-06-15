@@ -50,9 +50,10 @@ void setup()
 
   timer.setInterval(2000L, sendTemps); // Temperature sensor polling interval
   timer.setInterval(1000L, sendAlarmStatus);
-  timer.setInterval(5000L, heartbeatOn); // Blinks Blynk LED to reflect online status
   timer.setInterval(60000L, hiLoTemps);
   timer.setInterval(5000L, setHiLoTemps);
+
+  heartbeatOn();
 
   Blynk.virtualWrite(22, "RST");
   Blynk.virtualWrite(23, "RST");
@@ -100,16 +101,22 @@ BLYNK_WRITE(V27) // App button to report uptime
 
   if (pinData == 0)
   {
-    timer.setTimeout(2000L, uptimeSend);
+    timer.setTimeout(3000L, uptimeSend);
   }
 }
 
-void uptimeSend()  // Blinks a virtual LED in the Blynk app to show the ESP is live and reporting.
+void uptimeSend()
 {
-  float secDur = millis() / 1000;
-  float minDur = secDur / 60;
-  float hourDur = minDur / 60;
-  terminal.println(String("Node01 (Attic/Tstat): ") + hourDur + " hours ");
+  long minDur = millis() / 60000L;
+  long hourDur = millis() / 3600000L;
+  if (minDur < 121)
+  {
+    terminal.println(String("Node01 (AT): ") + minDur + " mins");
+  }
+  else if (minDur > 120)
+  {
+    terminal.println(String("Node01 (AT): ") + hourDur + " hours");
+  }
   terminal.flush();
 }
 
@@ -122,27 +129,28 @@ void heartbeatOn()  // Blinks a virtual LED in the Blynk app to show the ESP is 
 void heartbeatOff()
 {
   led1.off();  // The OFF portion of the LED heartbeat indicator in the Blynk app
+  timer.setTimeout(2500L, heartbeatOn);
 }
 
 void setHiLoTemps()
 {
-  // Daily at 23:59, "yesterday's date" and high/low temp are recorded.
-  if (hour() == 23 && minute() == 59 && setHiLoTempsLatch == 0)
+  // Daily at 00:01, "yesterday's date" and high/low temp are recorded.
+  if (hour() == 00 && minute() == 01 && setHiLoTempsLatch == 0)
   {
-    yMonth = month();
-    yDate = day();
-    yYear = year();
-    yHigh = dailyHigh;
-    yLow = dailyLow;
-    yHighAttic = dailyHighAttic;
+    //yMonth = month();
+    //yDate = day();
+    //yYear = year();
+    //yHigh = dailyHigh;
+    //yLow = dailyLow;
+    //yHighAttic = dailyHighAttic;
     dailyHigh = 0; // Resets daily high temp
     dailyLow = 200; // Resets daily low temp
     dailyHighAttic = 0; // Resets attic daily high temp
-    timer.setTimeout(240000L, tweetHiLo); // Tweet hi/lo temps about 4 minutes after midnight
+    timer.setTimeout(60000L, tweetHiLo);
     setHiLoTempsLatch = 1; // Locks out setHiLoTemps() until Tweet is sent.
-    Blynk.virtualWrite(22, "RST");
-    Blynk.virtualWrite(23, "RST");
-    Blynk.virtualWrite(24, "RST");
+    //Blynk.virtualWrite(22, "RST");
+    //Blynk.virtualWrite(23, "RST");
+    //Blynk.virtualWrite(24, "RST");
   }
 }
 
@@ -167,11 +175,13 @@ void hiLoTemps()
   }
 }
 
+
 void tweetHiLo() // Runs once about 4 minutes after midnight. Called in hiLoTemps().
 {
-  Blynk.tweet(String("On ") + yMonth + "/" + yDate + "/" + yYear + " the house high/low temps were " + yHigh + "°F/" + yLow + "°F. Attic high was " + yHighAttic + "°F.");
+  //Blynk.tweet(String("On ") + yMonth + "/" + yDate + "/" + yYear + " the house high/low temps were " + yHigh + "°F/" + yLow + "°F. Attic high was " + yHighAttic + "°F.");
   setHiLoTempsLatch = 0; // Re-enables setHiLoTemps()
 }
+
 
 void sendTemps()
 {
