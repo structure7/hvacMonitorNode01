@@ -7,6 +7,7 @@ The project idea that got me started in Arduino... a way to get a notification o
 * ESP-8266 (ESP-01... the tiny one).
 * Two DS18B20 temperature sensors (one in attic, one in the house thermostat).
 * Adjustable buck converter (4.5-28VDC in - .8-20VDC out - model CN1584). Adjusted to 3.3V. (<a href="http://www.ebay.com/itm/171868430133">eBay source</a>)
+* Upgraded 1MB flash chip to 4MB to support OTA.
 
 ## Features
 * Monitors a Broadview security alarm panel (details below) and notifies my mobile device when an alarm is triggered.
