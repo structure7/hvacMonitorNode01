@@ -4,9 +4,13 @@
 #include <BlynkSimpleEsp8266.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#define ONE_WIRE_BUS 2  // ESP-01 GPIO 2
-#include <TimeLib.h> // Used by WidgetRTC.h
+#define ONE_WIRE_BUS 2        // ESP-01 GPIO 2
+#include <TimeLib.h>          // Used by WidgetRTC.h
 #include <WidgetRTC.h>
+
+#include <ESP8266mDNS.h>        // Required for OTA
+#include <WiFiUdp.h>            // Required for OTA
+#include <ArduinoOTA.h>         // Required for OTA
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
@@ -15,16 +19,21 @@ DeviceAddress ds18b20house = { 0x28, 0xFF, 0x35, 0x11, 0x01, 0x16, 0x04, 0x25 };
 DeviceAddress ds18b20attic = { 0x28, 0xC6, 0x89, 0x1E, 0x00, 0x00, 0x80, 0xAA }; // Attic temperature probe
 
 char auth[] = "fromBlynkApp";
+char ssid[] = "ssid";
+char pass[] = "pw";
 
-int buzzerPin = 0;  // ESP-01 GPIO 0
-int alarmLatch = 0;
-int setHiLoTempsLatch = 0;
-int dailyHigh = 0; // Kicks off with overly low high
-int dailyLow = 200; // Kicks off with overly high low
-int dailyHighAttic = 0; // Kicks off with overly low high
+int buzzerPin = 0;              // ESP-01 GPIO 0
+bool alarmFlag;                 // TRUE if alarm is active. Allows for one alarm notification per instance.
+int dailyHouseHigh = 0;         // Kicks off with overly low high
+int dailyHouseLow = 200;        // Kicks off with overly high low
+int dailyAtticHigh = 0;         // Kicks off with overly low high
+int tempHouseHighAlarm = 100;   // Default house high temp alarm setpoint until selection is made in app
 int alarmTimer, yHigh, yLow, yHighAttic, yMonth, yDate, yYear;
-float tempHouse, tempAttic;
-int tempHouseHighAlarm = 200;
+float tempHouse, tempAttic; // Current house and attic temps
+
+
+bool manualFlag;                // TRUE if manual update mode is active.
+bool v22flag, v23flag, v24flag; // TRUE is an update for a vPin is active.
 
 SimpleTimer timer;
 
@@ -36,7 +45,7 @@ WidgetTerminal terminal(V26);
 void setup()
 {
   Serial.begin(9600);
-  Blynk.begin(auth, "ssid", "pw");
+  Blynk.begin(auth, ssid, pass);
 
   while (Blynk.connect() == false) {
     // Wait until connected
@@ -46,11 +55,39 @@ void setup()
   sensors.setResolution(ds18b20house, 10);
   sensors.setResolution(ds18b20attic, 10);
 
+  // START OTA ROUTINE
+  ArduinoOTA.setHostname("esp8266-Node01AT");
+
+  ArduinoOTA.onStart([]() {
+    Serial.println("Start");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
+  ArduinoOTA.begin();
+  Serial.println("Ready");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.print("MAC address: ");
+  Serial.println(WiFi.macAddress());
+  // END OTA ROUTINE
+
   rtc.begin();
 
   timer.setInterval(2000L, sendTemps); // Temperature sensor polling interval
   timer.setInterval(1000L, sendAlarmStatus);
-  timer.setInterval(60000L, hiLoTemps);
+  timer.setInterval(30000L, hiLoTemps);
   timer.setInterval(5000L, setHiLoTemps);
 
   heartbeatOn();
@@ -58,6 +95,13 @@ void setup()
   Blynk.virtualWrite(22, "RST");
   Blynk.virtualWrite(23, "RST");
   Blynk.virtualWrite(24, "RST");
+}
+
+void loop()
+{
+  Blynk.run();
+  timer.run();
+  ArduinoOTA.handle();
 }
 
 BLYNK_WRITE(V30) {
@@ -111,11 +155,13 @@ void uptimeSend()
   long hourDur = millis() / 3600000L;
   if (minDur < 121)
   {
-    terminal.println(String("Node01 (AT): ") + minDur + " mins");
+    terminal.print(String("Node01 (AT): ") + minDur + " mins @ ");
+    terminal.println(WiFi.localIP());
   }
   else if (minDur > 120)
   {
-    terminal.println(String("Node01 (AT): ") + hourDur + " hours");
+    terminal.print(String("Node01 (AT): ") + hourDur + " hrs @ ");
+    terminal.println(WiFi.localIP());
   }
   terminal.flush();
 }
@@ -135,53 +181,34 @@ void heartbeatOff()
 void setHiLoTemps()
 {
   // Daily at 00:01, "yesterday's date" and high/low temp are recorded.
-  if (hour() == 00 && minute() == 01 && setHiLoTempsLatch == 0)
+  if (hour() == 00 && minute() == 01)
   {
-    //yMonth = month();
-    //yDate = day();
-    //yYear = year();
-    //yHigh = dailyHigh;
-    //yLow = dailyLow;
-    //yHighAttic = dailyHighAttic;
-    dailyHigh = 0; // Resets daily high temp
-    dailyLow = 200; // Resets daily low temp
-    dailyHighAttic = 0; // Resets attic daily high temp
-    timer.setTimeout(60000L, tweetHiLo);
-    setHiLoTempsLatch = 1; // Locks out setHiLoTemps() until Tweet is sent.
-    //Blynk.virtualWrite(22, "RST");
-    //Blynk.virtualWrite(23, "RST");
-    //Blynk.virtualWrite(24, "RST");
+    dailyHouseHigh = 0;     // Resets daily high temp
+    dailyHouseLow = 200;    // Resets daily low temp
+    dailyAtticHigh = 0;     // Resets attic daily high temp
   }
 }
 
 void hiLoTemps()
 {
-  if (tempHouse > dailyHigh)
+  if (tempHouse > dailyHouseHigh)
   {
-    dailyHigh = tempHouse;
-    Blynk.virtualWrite(22, dailyHigh);
+    dailyHouseHigh = tempHouse;
+    Blynk.virtualWrite(22, dailyHouseHigh);
   }
 
-  if (tempHouse < dailyLow)
+  if (tempHouse < dailyHouseLow)
   {
-    dailyLow = tempHouse;
-    Blynk.virtualWrite(23, dailyLow);
+    dailyHouseLow = tempHouse;
+    Blynk.virtualWrite(23, dailyHouseLow);
   }
 
-  if (tempAttic > dailyHighAttic)
+  if (tempAttic > dailyAtticHigh)
   {
-    dailyHighAttic = tempAttic;
-    Blynk.virtualWrite(24, dailyHighAttic);
+    dailyAtticHigh = tempAttic;
+    Blynk.virtualWrite(24, dailyAtticHigh);
   }
 }
-
-
-void tweetHiLo() // Runs once about 4 minutes after midnight. Called in hiLoTemps().
-{
-  //Blynk.tweet(String("On ") + yMonth + "/" + yDate + "/" + yYear + " the house high/low temps were " + yHigh + "°F/" + yLow + "°F. Attic high was " + yHighAttic + "°F.");
-  setHiLoTempsLatch = 0; // Re-enables setHiLoTemps()
-}
-
 
 void sendTemps()
 {
@@ -218,9 +245,9 @@ void sendAlarmStatus()
   if (digitalRead(buzzerPin) == HIGH) // Runs when alarm buzzer is OFF (pulled high)
   {
     alarmTimer = 0;
-    alarmLatch = 0;
+    alarmFlag = 0;
   }
-  else if (digitalRead(buzzerPin) == LOW && alarmLatch == 0)
+  else if (digitalRead(buzzerPin) == LOW && alarmFlag == 0)
   {
     Blynk.notify("SECURITY ALARM TRIGGERED.");
 
@@ -241,9 +268,9 @@ void sendAlarmStatus()
       Blynk.tweet(String(month()) + "/" + day() + " " + hourFormat12() + ":" + minute() + "PM - SECURITY ALARM TRIGGERED");
     }
 
-    alarmLatch++;
+    alarmFlag = 1;
   }
-  else if (digitalRead(buzzerPin) == LOW && alarmLatch != 0)
+  else if (digitalRead(buzzerPin) == LOW && alarmFlag != 0)
   {
     alarmTimer++;
     Serial.println(alarmTimer);
@@ -263,8 +290,72 @@ void sendAlarmStatus()
   }
 }
 
-void loop()
+BLYNK_WRITE(V26)  // Manual updates to vPins
 {
-  Blynk.run();
-  timer.run();
+  if ( String("manual") == param.asStr() || String("MANUAL") == param.asStr())  // Enters manual update mode
+  {
+    terminal.println(""); terminal.println("");
+    terminal.println(""); terminal.println("");
+    terminal.println("    Variables you can manually update:");
+    terminal.println("V22: House high temp.");
+    terminal.println("V23: House low temp.");
+    terminal.println("V24: Attic high temp.");
+    terminal.println("");
+    terminal.println("Enter v** to update, 'x' to exit:");
+    manualFlag = 1;
+  }
+
+  if (v22flag == 1 && manualFlag == 1)                                // Data entry mode for vPins. This group must be above the selection mode below.
+  {
+    Blynk.virtualWrite(22, param.asInt());
+    dailyHouseHigh = param.asInt();
+    terminal.println("");
+    terminal.println(String("Updated with ") + dailyHouseHigh + ".");
+    terminal.println(""); terminal.println("Mode closed.");
+    v22flag = 0;
+    manualFlag = 0;
+  }
+  else if (v23flag == 1 && manualFlag == 1)
+  {
+    Blynk.virtualWrite(23, param.asInt());
+    dailyHouseLow = param.asInt();
+    terminal.println("");
+    terminal.println(String("Updated with ") + dailyHouseLow + ".");
+    terminal.println(""); terminal.println("Mode closed.");
+    v23flag = 0;
+    manualFlag = 0;
+  }  
+  else if (v24flag == 1 && manualFlag == 1)
+  {
+    Blynk.virtualWrite(24, param.asInt());
+    dailyAtticHigh = param.asInt();
+    terminal.println("");
+    terminal.println(String("Updated with ") + dailyAtticHigh + ".");
+
+    v24flag = 0;
+    manualFlag = 0;
+  }
+  
+  if ( (String("V22") == param.asStr() || String("v22") == param.asStr()) && manualFlag == 1)       // Enters vPin selection mode.
+  {
+    terminal.println(" "); terminal.println("Enter value to update V22 to:");
+    v22flag = 1;
+  }
+  else if ( (String("V23") == param.asStr() || String("v23") == param.asStr()) && manualFlag == 1)
+  {
+    terminal.println(" "); terminal.println("Enter value to update V23 to:");
+    v23flag = 1;
+  }
+  else if ( (String("V24") == param.asStr() || String("v24") == param.asStr()) && manualFlag == 1)
+  {
+    terminal.println(" "); terminal.println("Enter value to update V24 to:");
+    v24flag = 1;
+  }
+  else if ( (String("x") == param.asStr() || String("X") == param.asStr()) && manualFlag == 1)
+  {
+    manualFlag = 0;
+    terminal.println(""); terminal.println("Mode closed.");    
+  }
+
+  terminal.flush();
 }
