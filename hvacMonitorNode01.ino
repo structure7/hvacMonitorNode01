@@ -19,7 +19,7 @@ DeviceAddress ds18b20house = { 0x28, 0xFF, 0x35, 0x11, 0x01, 0x16, 0x04, 0x25 };
 DeviceAddress ds18b20attic = { 0x28, 0xC6, 0x89, 0x1E, 0x00, 0x00, 0x80, 0xAA }; // Attic temperature probe
 
 char auth[] = "fromBlynkApp";
-char ssid[] = "ssid";
+char ssid[] = ssid;
 char pass[] = "pw";
 
 int buzzerPin = 0;              // ESP-01 GPIO 0
@@ -37,7 +37,6 @@ bool v22flag, v23flag, v24flag; // TRUE is an update for a vPin is active.
 
 SimpleTimer timer;
 
-WidgetLED led1(V11); // Heartbeat
 WidgetRTC rtc;
 BLYNK_ATTACH_WIDGET(rtc, V8);
 WidgetTerminal terminal(V26);
@@ -89,8 +88,7 @@ void setup()
   timer.setInterval(1000L, sendAlarmStatus);
   timer.setInterval(30000L, hiLoTemps);
   timer.setInterval(5000L, setHiLoTemps);
-
-  heartbeatOn();
+  timer.setInterval(1000L, uptimeReport);
 
   Blynk.virtualWrite(22, "RST");
   Blynk.virtualWrite(23, "RST");
@@ -166,16 +164,11 @@ void uptimeSend()
   terminal.flush();
 }
 
-void heartbeatOn()  // Blinks a virtual LED in the Blynk app to show the ESP is live and reporting.
-{
-  led1.on();
-  timer.setTimeout(2500L, heartbeatOff);
-}
-
-void heartbeatOff()
-{
-  led1.off();  // The OFF portion of the LED heartbeat indicator in the Blynk app
-  timer.setTimeout(2500L, heartbeatOn);
+void uptimeReport(){
+  if (second() > 1 && second() < 6)
+  {
+    Blynk.virtualWrite(101, minute());
+  }
 }
 
 void setHiLoTemps()
