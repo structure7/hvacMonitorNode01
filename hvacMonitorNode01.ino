@@ -1,3 +1,10 @@
+/* Node01 responsibilities:
+   - Send notification if security alarm goes off and tweet it, too.
+   - Reports tstat's and attic's temperature.
+   - Ability send notification alarm if certain temp setpoint reached.
+   - Can manually update house high, house low, and attic high. API & new storage tactic might negate the need for this.
+*/
+
 #include <SimpleTimer.h>
 #define BLYNK_PRINT Serial    // Comment this out to disable prints and save space
 #include <ESP8266WiFi.h>
@@ -19,7 +26,7 @@ DeviceAddress ds18b20house = { 0x28, 0xFF, 0x35, 0x11, 0x01, 0x16, 0x04, 0x25 };
 DeviceAddress ds18b20attic = { 0x28, 0xC6, 0x89, 0x1E, 0x00, 0x00, 0x80, 0xAA }; // Attic temperature probe
 
 char auth[] = "fromBlynkApp";
-char ssid[] = ssid;
+char ssid[] = "ssid";
 char pass[] = "pw";
 
 int buzzerPin = 0;              // ESP-01 GPIO 0
@@ -164,7 +171,7 @@ void uptimeSend()
   terminal.flush();
 }
 
-void uptimeReport(){
+void uptimeReport() {
   if (second() > 1 && second() < 6)
   {
     Blynk.virtualWrite(101, minute());
@@ -216,6 +223,19 @@ void sendTemps()
   else
   {
     Blynk.virtualWrite(3, "ERR");
+  }
+
+  if (tempHouse < 78)
+  {
+    Blynk.setProperty(V3, "color", "#04C0F8"); // Blue
+  }
+  else if (tempHouse >= 78 && tempHouse <= 80)
+  {
+    Blynk.setProperty(V3, "color", "#ED9D00"); // Yellow
+  }
+  else if (tempHouse > 80)
+  {
+    Blynk.setProperty(V3, "color", "#D3435C"); // Red
   }
 
   if (tempAttic >= 0) // Different than above due to very high attic temps
@@ -317,7 +337,7 @@ BLYNK_WRITE(V26)  // Manual updates to vPins
     terminal.println(""); terminal.println("Mode closed.");
     v23flag = 0;
     manualFlag = 0;
-  }  
+  }
   else if (v24flag == 1 && manualFlag == 1)
   {
     Blynk.virtualWrite(24, param.asInt());
@@ -328,7 +348,7 @@ BLYNK_WRITE(V26)  // Manual updates to vPins
     v24flag = 0;
     manualFlag = 0;
   }
-  
+
   if ( (String("V22") == param.asStr() || String("v22") == param.asStr()) && manualFlag == 1)       // Enters vPin selection mode.
   {
     terminal.println(" "); terminal.println("Enter value to update V22 to:");
@@ -347,7 +367,7 @@ BLYNK_WRITE(V26)  // Manual updates to vPins
   else if ( (String("x") == param.asStr() || String("X") == param.asStr()) && manualFlag == 1)
   {
     manualFlag = 0;
-    terminal.println(""); terminal.println("Mode closed.");    
+    terminal.println(""); terminal.println("Mode closed.");
   }
 
   terminal.flush();
