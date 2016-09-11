@@ -11,7 +11,7 @@ The project idea that got me started in Arduino... a way to get a notification o
 
 ## Features
 * Monitors a Broadview security alarm panel (details below) and notifies my mobile device when an alarm is triggered.
-* Tweets the house's daily high and low temperature, and the attic's daily high temperature.
+* Monitors temperature sensor added to house tstat and a temperature sensor located in the attic.
 * In-app ability to manually update high/low temperatures using terminal `manual` command.
 
 ## Security Alarm Panel Monitoring
