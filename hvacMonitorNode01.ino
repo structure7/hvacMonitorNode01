@@ -2,7 +2,6 @@
    - Send notification if security alarm goes off and tweet it, too.
    - Reports tstat's and attic's temperature.
    - Ability send notification alarm if certain temp setpoint reached.
-   - Can manually update house high, house low, and attic high. API & new storage tactic might negate the need for this.
 */
 
 #include <SimpleTimer.h>
@@ -36,11 +35,7 @@ int dailyHouseLow = 200;        // Kicks off with overly high low
 int dailyAtticHigh = 0;         // Kicks off with overly low high
 int tempHouseHighAlarm = 100;   // Default house high temp alarm setpoint until selection is made in app
 int alarmTimer, yHigh, yLow, yHighAttic, yMonth, yDate, yYear;
-float tempHouse, tempAttic; // Current house and attic temps
-
-
-bool manualFlag;                // TRUE if manual update mode is active.
-bool v22flag, v23flag, v24flag; // TRUE is an update for a vPin is active.
+float tempHouse, tempAttic;     // Current house and attic temps
 
 SimpleTimer timer;
 
@@ -91,7 +86,7 @@ void setup()
 
   rtc.begin();
 
-  timer.setInterval(2000L, sendTemps); // Temperature sensor polling interval
+  timer.setInterval(2101L, sendTemps); // Temperature sensor polling interval
   timer.setInterval(1000L, sendAlarmStatus);
   timer.setInterval(30000L, hiLoTemps);
   timer.setInterval(5000L, setHiLoTemps);
@@ -219,28 +214,39 @@ void sendTemps()
   if (tempHouse >= 30 && tempHouse <= 120)
   {
     Blynk.virtualWrite(3, tempHouse);
+    if (tempHouse < 78)
+    {
+      Blynk.setProperty(V3, "color", "#04C0F8"); // Blue
+    }
+    else if (tempHouse >= 78 && tempHouse <= 80)
+    {
+      Blynk.setProperty(V3, "color", "#ED9D00"); // Yellow
+    }
+    else if (tempHouse > 80)
+    {
+      Blynk.setProperty(V3, "color", "#D3435C"); // Red
+    }
   }
   else
   {
     Blynk.virtualWrite(3, "ERR");
   }
 
-  if (tempHouse < 78)
-  {
-    Blynk.setProperty(V3, "color", "#04C0F8"); // Blue
-  }
-  else if (tempHouse >= 78 && tempHouse <= 80)
-  {
-    Blynk.setProperty(V3, "color", "#ED9D00"); // Yellow
-  }
-  else if (tempHouse > 80)
-  {
-    Blynk.setProperty(V3, "color", "#D3435C"); // Red
-  }
-
   if (tempAttic >= 0) // Different than above due to very high attic temps
   {
     Blynk.virtualWrite(7, tempAttic);
+    if (tempAttic < 80)
+    {
+      Blynk.setProperty(V7, "color", "#04C0F8"); // Blue
+    }
+    else if (tempAttic >= 81 && tempAttic <= 100)
+    {
+      Blynk.setProperty(V7, "color", "#ED9D00"); // Yellow
+    }
+    else if (tempAttic > 100)
+    {
+      Blynk.setProperty(V7, "color", "#D3435C"); // Red
+    }
   }
   else
   {
@@ -301,74 +307,4 @@ void sendAlarmStatus()
   {
     Blynk.notify("SECURITY ALARM STILL GOING: 10 MIN.");
   }
-}
-
-BLYNK_WRITE(V26)  // Manual updates to vPins
-{
-  if ( String("manual") == param.asStr() || String("MANUAL") == param.asStr())  // Enters manual update mode
-  {
-    terminal.println(""); terminal.println("");
-    terminal.println(""); terminal.println("");
-    terminal.println("    Variables you can manually update:");
-    terminal.println("V22: House high temp.");
-    terminal.println("V23: House low temp.");
-    terminal.println("V24: Attic high temp.");
-    terminal.println("");
-    terminal.println("Enter v** to update, 'x' to exit:");
-    manualFlag = 1;
-  }
-
-  if (v22flag == 1 && manualFlag == 1)                                // Data entry mode for vPins. This group must be above the selection mode below.
-  {
-    Blynk.virtualWrite(22, param.asInt());
-    dailyHouseHigh = param.asInt();
-    terminal.println("");
-    terminal.println(String("Updated with ") + dailyHouseHigh + ".");
-    terminal.println(""); terminal.println("Mode closed.");
-    v22flag = 0;
-    manualFlag = 0;
-  }
-  else if (v23flag == 1 && manualFlag == 1)
-  {
-    Blynk.virtualWrite(23, param.asInt());
-    dailyHouseLow = param.asInt();
-    terminal.println("");
-    terminal.println(String("Updated with ") + dailyHouseLow + ".");
-    terminal.println(""); terminal.println("Mode closed.");
-    v23flag = 0;
-    manualFlag = 0;
-  }
-  else if (v24flag == 1 && manualFlag == 1)
-  {
-    Blynk.virtualWrite(24, param.asInt());
-    dailyAtticHigh = param.asInt();
-    terminal.println("");
-    terminal.println(String("Updated with ") + dailyAtticHigh + ".");
-
-    v24flag = 0;
-    manualFlag = 0;
-  }
-
-  if ( (String("V22") == param.asStr() || String("v22") == param.asStr()) && manualFlag == 1)       // Enters vPin selection mode.
-  {
-    terminal.println(" "); terminal.println("Enter value to update V22 to:");
-    v22flag = 1;
-  }
-  else if ( (String("V23") == param.asStr() || String("v23") == param.asStr()) && manualFlag == 1)
-  {
-    terminal.println(" "); terminal.println("Enter value to update V23 to:");
-    v23flag = 1;
-  }
-  else if ( (String("V24") == param.asStr() || String("v24") == param.asStr()) && manualFlag == 1)
-  {
-    terminal.println(" "); terminal.println("Enter value to update V24 to:");
-    v24flag = 1;
-  }
-  else if ( (String("x") == param.asStr() || String("X") == param.asStr()) && manualFlag == 1)
-  {
-    manualFlag = 0;
-    terminal.println(""); terminal.println("Mode closed.");
-  }
-
-  terminal.flush();
 }
