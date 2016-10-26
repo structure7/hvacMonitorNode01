@@ -86,15 +86,15 @@ void setup()
 
   rtc.begin();
 
-  timer.setInterval(2101L, sendTemps); // Temperature sensor polling interval
+  timer.setInterval(2011L, sendHouseTemp);
+  timer.setInterval(30432L, sendAtticTemp);
   timer.setInterval(1000L, sendAlarmStatus);
   timer.setInterval(30000L, hiLoTemps);
-  timer.setInterval(5000L, setHiLoTemps);
+  timer.setInterval(5000L, resetHiLoTemps);
   timer.setInterval(1000L, uptimeReport);
-
-  Blynk.virtualWrite(22, "RST");
-  Blynk.virtualWrite(23, "RST");
-  Blynk.virtualWrite(24, "RST");
+  timer.setInterval(61221L, updateAppLabel);  // Update display property (app labels) where used.
+  timer.setTimeout(1000, vsync1);             // Syncs back vPins to survive hardware reset.
+  timer.setTimeout(2000, vsync2);             // Syncs back vPins to survive hardware reset.
 }
 
 void loop()
@@ -104,6 +104,32 @@ void loop()
   ArduinoOTA.handle();
 }
 
+void updateAppLabel()
+{
+  Blynk.setProperty(V3, "label", String("House ▲") + tempHouseHighAlarm + "°"); // ▲ entered using ALT-30, ° using ALT-248
+}
+
+void vsync1()
+{
+  Blynk.syncVirtual(V22);    // dailyHouseHigh
+  Blynk.syncVirtual(V23);    // dailyHouseLow
+}
+
+void vsync2()
+{
+  Blynk.syncVirtual(V30);    // tempHouseHighAlarm
+}
+
+BLYNK_WRITE(V22)
+{
+  dailyHouseHigh = param.asInt();
+}
+
+BLYNK_WRITE(V23)
+{
+  dailyHouseLow = param.asInt();
+}
+
 BLYNK_WRITE(V30) {
   switch (param.asInt())
   {
@@ -111,26 +137,30 @@ BLYNK_WRITE(V30) {
         tempHouseHighAlarm = 200;
         break;
       }
-    case 2: { // 80F Alarm
+    case 2: {
         tempHouseHighAlarm = 80;
         break;
       }
-    case 3: { // 82F Alarm
+    case 3: {
         tempHouseHighAlarm = 82;
         break;
       }
-    case 4: { // 84F Alarm;
+    case 4: {
         tempHouseHighAlarm = 84;
         break;
       }
-    case 5: { // 86F Alarm
+    case 5: {
         tempHouseHighAlarm = 86;
         break;
       }
     default: {
         Serial.println("Unknown item selected");
+        //tempHouseHighAlarm = param.asInt();
       }
   }
+  
+  Blynk.setProperty(V3, "label", String("House ▲") + tempHouseHighAlarm + "°");
+
 }
 
 void notifyAndOff()
@@ -173,9 +203,9 @@ void uptimeReport() {
   }
 }
 
-void setHiLoTemps()
+void resetHiLoTemps()
 {
-  // Daily at 00:01, "yesterday's date" and high/low temp are recorded.
+  // Daily at 00:01, yesterday's high/low temps are reset,
   if (hour() == 00 && minute() == 01)
   {
     dailyHouseHigh = 0;     // Resets daily high temp
@@ -205,32 +235,10 @@ void hiLoTemps()
   }
 }
 
-void sendTemps()
+void sendAtticTemp()
 {
   sensors.requestTemperatures(); // Polls the sensors
-  tempHouse = sensors.getTempF(ds18b20house);
   tempAttic = sensors.getTempF(ds18b20attic);
-
-  if (tempHouse >= 30 && tempHouse <= 120)
-  {
-    Blynk.virtualWrite(3, tempHouse);
-    if (tempHouse < 78)
-    {
-      Blynk.setProperty(V3, "color", "#04C0F8"); // Blue
-    }
-    else if (tempHouse >= 78 && tempHouse <= 80)
-    {
-      Blynk.setProperty(V3, "color", "#ED9D00"); // Yellow
-    }
-    else if (tempHouse > 80)
-    {
-      Blynk.setProperty(V3, "color", "#D3435C"); // Red
-    }
-  }
-  else
-  {
-    Blynk.virtualWrite(3, "ERR");
-  }
 
   if (tempAttic >= 0) // Different than above due to very high attic temps
   {
@@ -251,6 +259,34 @@ void sendTemps()
   else
   {
     Blynk.virtualWrite(7, "ERR");
+    Blynk.setProperty(V7, "color", "#D3435C"); // Red
+  }
+}
+
+void sendHouseTemp() {
+  sensors.requestTemperatures(); // Polls the sensors
+  tempHouse = sensors.getTempF(ds18b20house);
+
+  if (tempHouse >= 30 && tempHouse <= 120)
+  {
+    Blynk.virtualWrite(3, tempHouse);
+    if (tempHouse < 78)
+    {
+      Blynk.setProperty(V3, "color", "#04C0F8"); // Blue
+    }
+    else if (tempHouse >= 78 && tempHouse <= 80)
+    {
+      Blynk.setProperty(V3, "color", "#ED9D00"); // Yellow
+    }
+    else if (tempHouse > 80)
+    {
+      Blynk.setProperty(V3, "color", "#D3435C"); // Red
+    }
+  }
+  else
+  {
+    Blynk.virtualWrite(3, "ERR");
+    Blynk.setProperty(V3, "color", "#D3435C"); // Red
   }
 
   if (tempHouse >= tempHouseHighAlarm)
