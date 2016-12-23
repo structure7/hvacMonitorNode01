@@ -33,9 +33,21 @@ bool alarmFlag;                 // TRUE if alarm is active. Allows for one alarm
 int dailyHouseHigh = 0;         // Kicks off with overly low high
 int dailyHouseLow = 200;        // Kicks off with overly high low
 int dailyAtticHigh = 0;         // Kicks off with overly low high
+int dailyAtticLow = 200;
 int tempHouseHighAlarm = 100;   // Default house high temp alarm setpoint until selection is made in app
 int alarmTimer, yHigh, yLow, yHighAttic, yMonth, yDate, yYear;
-float tempHouse, tempAttic;     // Current house and attic temps
+double tempHouse, tempAttic;    // Current house and attic temps
+int tempHouseInt, tempAtticInt;
+
+int houseLast24high = 0;
+int houseLast24low = 200;               // Rolling high/low temps in last 24-hours.
+int houseLast24hoursTemps[288];         // Last 24-hours temps recorded every 5 minutes.
+int houseArrayIndex = 0;
+
+int atticLast24high = 0;
+int atticLast24low = 200;               // Rolling high/low temps in last 24-hours.
+int atticLast24hoursTemps[288];         // Last 24-hours temps recorded every 5 minutes.
+int atticArrayIndex = 0;
 
 SimpleTimer timer;
 
@@ -57,7 +69,7 @@ void setup()
   sensors.setResolution(ds18b20attic, 10);
 
   // START OTA ROUTINE
-  ArduinoOTA.setHostname("esp8266-Node01AT");
+  ArduinoOTA.setHostname("Node01AT_ESP-01");
 
   ArduinoOTA.onStart([]() {
     Serial.println("Start");
@@ -87,14 +99,13 @@ void setup()
   rtc.begin();
 
   timer.setInterval(2011L, sendHouseTemp);
-  timer.setInterval(30432L, sendAtticTemp);
+  timer.setInterval(3432L, sendAtticTemp);
   timer.setInterval(1000L, sendAlarmStatus);
-  timer.setInterval(30000L, hiLoTemps);
-  timer.setInterval(5000L, resetHiLoTemps);
   timer.setInterval(1000L, uptimeReport);
-  timer.setInterval(61221L, updateAppLabel);  // Update display property (app labels) where used.
-  timer.setTimeout(1000, vsync1);             // Syncs back vPins to survive hardware reset.
-  timer.setTimeout(2000, vsync2);             // Syncs back vPins to survive hardware reset.
+  timer.setTimeout(1000, vsync1);                   // Syncs back vPins to survive hardware reset
+  timer.setTimeout(2000, vsync2);                   // Syncs back vPins to survive hardware reset
+  timer.setInterval(300000L, recordHighLowTemps);   // 'Last 24 hours' array and 'since midnight' variables updated ~5 minutes. TODO: find a way to make the array do both!
+  timer.setTimeout(5000, setupArray);               // Sets entire array to temp at startup for a "baseline"
 }
 
 void loop()
@@ -102,11 +113,11 @@ void loop()
   Blynk.run();
   timer.run();
   ArduinoOTA.handle();
-}
 
-void updateAppLabel()
-{
-  Blynk.setProperty(V3, "label", String("House ▲") + tempHouseHighAlarm + "°"); // ▲ entered using ALT-30, ° using ALT-248
+  if (hour() == 00 && minute() == 01)
+  {
+    timer.setTimeout(61000, resetHiLoTemps);
+  }
 }
 
 void vsync1()
@@ -158,9 +169,6 @@ BLYNK_WRITE(V30) {
         //tempHouseHighAlarm = param.asInt();
       }
   }
-  
-  Blynk.setProperty(V3, "label", String("House ▲") + tempHouseHighAlarm + "°");
-
 }
 
 void notifyAndOff()
@@ -203,42 +211,22 @@ void uptimeReport() {
   }
 }
 
-void resetHiLoTemps()
-{
-  // Daily at 00:01, yesterday's high/low temps are reset,
-  if (hour() == 00 && minute() == 01)
-  {
-    dailyHouseHigh = 0;     // Resets daily high temp
-    dailyHouseLow = 200;    // Resets daily low temp
-    dailyAtticHigh = 0;     // Resets attic daily high temp
-  }
-}
-
-void hiLoTemps()
-{
-  if (tempHouse > dailyHouseHigh)
-  {
-    dailyHouseHigh = tempHouse;
-    Blynk.virtualWrite(22, dailyHouseHigh);
-  }
-
-  if (tempHouse < dailyHouseLow)
-  {
-    dailyHouseLow = tempHouse;
-    Blynk.virtualWrite(23, dailyHouseLow);
-  }
-
-  if (tempAttic > dailyAtticHigh)
-  {
-    dailyAtticHigh = tempAttic;
-    Blynk.virtualWrite(24, dailyAtticHigh);
-  }
-}
-
 void sendAtticTemp()
 {
   sensors.requestTemperatures(); // Polls the sensors
   tempAttic = sensors.getTempF(ds18b20attic);
+
+  // Conversion of tempAttic to tempAtticInt
+  int xAtticInt = (int) tempAttic;
+  double xTempAttic10ths = (tempAttic - xAtticInt);
+  if (xTempAttic10ths >= .50)
+  {
+    tempAtticInt = (xAtticInt + 1);
+  }
+  else
+  {
+    tempAtticInt = xAtticInt;
+  }
 
   if (tempAttic >= 0) // Different than above due to very high attic temps
   {
@@ -266,6 +254,18 @@ void sendAtticTemp()
 void sendHouseTemp() {
   sensors.requestTemperatures(); // Polls the sensors
   tempHouse = sensors.getTempF(ds18b20house);
+
+  // Conversion of tempHouse to tempHouseInt
+  int xHouseInt = (int) tempHouse;
+  double xHouse10ths = (tempHouse - xHouseInt);
+  if (xHouse10ths >= .50)
+  {
+    tempHouseInt = (xHouseInt + 1);
+  }
+  else
+  {
+    tempHouseInt = xHouseInt;
+  }
 
   if (tempHouse >= 30 && tempHouse <= 120)
   {
@@ -343,4 +343,140 @@ void sendAlarmStatus()
   {
     Blynk.notify("SECURITY ALARM STILL GOING: 10 MIN.");
   }
+}
+
+void setupArray()
+{
+  for (int i = 0; i < 288; i++)
+  {
+    houseLast24hoursTemps[i] = tempHouseInt;
+  }
+
+  houseLast24high = tempHouseInt;
+  houseLast24low = tempHouseInt;
+
+  Blynk.setProperty(V3, "label", "House");
+
+  for (int i = 0; i < 288; i++)
+  {
+    atticLast24hoursTemps[i] = tempAtticInt;
+  }
+
+  atticLast24high = tempAtticInt;
+  atticLast24low = tempAtticInt;
+
+  Blynk.setProperty(V7, "label", "Attic");
+}
+
+void recordHighLowTemps()
+{
+  // HOUSE TEMPERATURES
+  if (houseArrayIndex < 288)  // Records house temperature to the current array position. 287 positions covers 24 hours every 5 minutes.
+  {
+    houseLast24hoursTemps[houseArrayIndex] = tempHouseInt;
+    ++houseArrayIndex;
+  }
+  else                        // Restart array to index 0 when it reached the end.
+  {
+    houseArrayIndex = 0;
+    houseLast24hoursTemps[houseArrayIndex] = tempHouseInt;
+    ++houseArrayIndex;
+  }
+
+  houseLast24high = -200; // Set high/low in prep for below.
+  houseLast24low = 200;
+
+  for (int i = 0; i < 288; i++) // Find the high/low in the array.
+  {
+    if (houseLast24hoursTemps[i] > houseLast24high)
+    {
+      houseLast24high = houseLast24hoursTemps[i];
+    }
+
+    if (houseLast24hoursTemps[i] < houseLast24low)
+    {
+      houseLast24low = houseLast24hoursTemps[i];
+    }
+  }
+
+  if (tempHouse > dailyHouseHigh) // Sets a high low which reset at midnight.
+  {
+    dailyHouseHigh = tempHouse;
+    Blynk.virtualWrite(22, dailyHouseHigh);
+  }
+
+  if (tempHouse < dailyHouseLow)
+  {
+    dailyHouseLow = tempHouse;
+    Blynk.virtualWrite(23, dailyHouseLow);
+  }
+
+  Blynk.setProperty(V3, "label", String("House ") + houseLast24high + "/" + houseLast24low);  // Sets label with high/low temps.
+  
+  // ATTIC TEMPERATURES
+  if (atticArrayIndex < 288)                   // Mess with array size and timing to taste!
+  {
+    atticLast24hoursTemps[atticArrayIndex] = tempAtticInt;
+    ++atticArrayIndex;
+  }
+  else
+  {
+    atticArrayIndex = 0;
+    atticLast24hoursTemps[atticArrayIndex] = tempAtticInt;
+    ++atticArrayIndex;
+  }
+
+  atticLast24high = -200;
+  atticLast24low = 200;
+
+  for (int i = 0; i < 288; i++)
+  {
+    if (atticLast24hoursTemps[i] > atticLast24high)
+    {
+      atticLast24high = atticLast24hoursTemps[i];
+    }
+
+    if (atticLast24hoursTemps[i] < atticLast24low)
+    {
+      atticLast24low = atticLast24hoursTemps[i];
+    }
+  }
+
+  if (tempAttic > dailyAtticHigh)
+  {
+    dailyAtticHigh = tempAttic;
+    Blynk.virtualWrite(24, dailyAtticHigh);
+  }
+
+  if (tempAtticInt < dailyAtticLow)
+  {
+    dailyAtticLow = tempAtticInt;
+  }
+
+  Blynk.setProperty(V7, "label", String("Attic ") + atticLast24high + "/" + atticLast24low);  // Sets label with high/low temps.
+}
+
+BLYNK_WRITE(V19)
+{
+  int pinData = param.asInt();
+
+  if (pinData == 0)
+  {
+    Blynk.setProperty(V3, "label", String("House ") + houseLast24high + "/" + houseLast24low);
+    Blynk.setProperty(V7, "label", String("Attic ") + atticLast24high + "/" + atticLast24low);
+  }
+
+  if (pinData == 1)
+  {
+    Blynk.setProperty(V3, "label", String("House ") + dailyHouseHigh + "|" + dailyHouseLow);
+    Blynk.setProperty(V7, "label", String("Attic ") + dailyAtticHigh + "|" + dailyAtticLow);
+  }
+}
+
+void resetHiLoTemps()
+{
+  dailyHouseHigh = 0;     // Resets daily high temp
+  dailyHouseLow = 200;    // Resets daily low temp
+  dailyAtticHigh = 0;     // Resets daily high temp
+  dailyAtticLow = 200;    // Resets daily low temp
 }
