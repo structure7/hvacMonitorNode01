@@ -6,7 +6,6 @@
 
 #include <SimpleTimer.h>
 #define BLYNK_PRINT Serial    // Comment this out to disable prints and save space
-#include <ESP8266WiFi.h>
 #include <BlynkSimpleEsp8266.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -52,7 +51,7 @@ int atticArrayIndex = 0;
 SimpleTimer timer;
 
 WidgetRTC rtc;
-BLYNK_ATTACH_WIDGET(rtc, V8);
+
 WidgetTerminal terminal(V26);
 
 void setup()
@@ -69,7 +68,7 @@ void setup()
   sensors.setResolution(ds18b20attic, 10);
 
   // START OTA ROUTINE
-  ArduinoOTA.setHostname("Node01AT_ESP-01");
+  ArduinoOTA.setHostname("Node01AT-ESP01");
 
   ArduinoOTA.onStart([]() {
     Serial.println("Start");
