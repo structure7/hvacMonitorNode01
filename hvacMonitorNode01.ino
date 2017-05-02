@@ -5,7 +5,7 @@
 */
 
 #include <SimpleTimer.h>
-#define BLYNK_PRINT Serial    // Comment this out to disable prints and save space
+//#define BLYNK_PRINT Serial    // Comment this out to disable prints and save space
 #include <BlynkSimpleEsp8266.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -47,6 +47,10 @@ int atticLast24high = 0;
 int atticLast24low = 200;               // Rolling high/low temps in last 24-hours.
 int atticLast24hoursTemps[288];         // Last 24-hours temps recorded every 5 minutes.
 int atticArrayIndex = 0;
+
+bool blynkFlag;
+int blynkDisconnectCount; 
+bool ranOnce;
 
 SimpleTimer timer;
 
@@ -105,6 +109,8 @@ void setup()
   timer.setTimeout(2000, vsync2);                   // Syncs back vPins to survive hardware reset
   timer.setInterval(300000L, recordHighLowTemps);   // 'Last 24 hours' array and 'since midnight' variables updated ~5 minutes. TODO: find a way to make the array do both!
   timer.setTimeout(5000, setupArray);               // Sets entire array to temp at startup for a "baseline"
+  timer.setInterval(250L, disconnectWatcher);     // Watches for a disconnect event
+  timer.setInterval(5000L, disconnectReporter);   // Reports disconnects to the app every 5 seconds
 }
 
 void loop()
@@ -117,6 +123,25 @@ void loop()
   {
     timer.setTimeout(61000, resetHiLoTemps);
   }
+
+  if (ranOnce == false && year() != 1970) {
+    Blynk.setProperty(V108, "label", String(hour()) + ":" + minute() + " " + month() + "/" + day() + " N1AT");
+    ranOnce = true;
+  }
+}
+
+void disconnectWatcher() {
+  if (Blynk.connected() == false && blynkFlag == false) {
+    ++blynkDisconnectCount;
+    blynkFlag = true;
+  }
+  else if (Blynk.connected() == true && blynkFlag == true) {
+    blynkFlag = false;
+  }
+}
+
+void disconnectReporter() {
+  Blynk.virtualWrite(V108, blynkDisconnectCount);
 }
 
 void vsync1()
