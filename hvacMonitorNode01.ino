@@ -37,6 +37,8 @@ int tempHouseHighAlarm = 100;   // Default house high temp alarm setpoint until 
 int alarmTimer, yHigh, yLow, yHighAttic, yMonth, yDate, yYear;
 double tempHouse, tempAttic;    // Current house and attic temps
 int tempHouseInt, tempAtticInt;
+int todaysDate;
+int lastMinute;
 
 int houseLast24high = 0;
 int houseLast24low = 200;               // Rolling high/low temps in last 24-hours.
@@ -49,14 +51,13 @@ int atticLast24hoursTemps[288];         // Last 24-hours temps recorded every 5 
 int atticArrayIndex = 0;
 
 bool blynkFlag;
-int blynkDisconnectCount; 
+int blynkDisconnectCount;
 bool ranOnce;
 
 SimpleTimer timer;
-
-WidgetRTC rtc;
-
 WidgetTerminal terminal(V26);
+WidgetRTC rtc;
+WidgetBridge bridge1(V50);
 
 void setup()
 {
@@ -101,16 +102,18 @@ void setup()
 
   rtc.begin();
 
-  timer.setInterval(2011L, sendHouseTemp);
-  timer.setInterval(3432L, sendAtticTemp);
-  timer.setInterval(1000L, sendAlarmStatus);
-  timer.setInterval(1000L, uptimeReport);
+  timer.setTimeout(5000, setupArray);               // Sets entire array to temp at startup for a "baseline"
   timer.setTimeout(1000, vsync1);                   // Syncs back vPins to survive hardware reset
   timer.setTimeout(2000, vsync2);                   // Syncs back vPins to survive hardware reset
-  timer.setInterval(300000L, recordHighLowTemps);   // 'Last 24 hours' array and 'since midnight' variables updated ~5 minutes. TODO: find a way to make the array do both!
-  timer.setTimeout(5000, setupArray);               // Sets entire array to temp at startup for a "baseline"
-  timer.setInterval(250L, disconnectWatcher);     // Watches for a disconnect event
-  timer.setInterval(5000L, disconnectReporter);   // Reports disconnects to the app every 5 seconds
+
+  timer.setInterval(1000L, sendAlarmStatus);
+  timer.setInterval(5432L, uptimeReport);
+  timer.setInterval(1001L, disconnectWatcher);     // Watches for a disconnect event
+  timer.setInterval(2011L, sendHouseTemp);
+  timer.setInterval(3432L, sendAtticTemp);
+  timer.setInterval(5000L, disconnectReporter);    // Reports disconnects to the app every 5 seconds
+  timer.setInterval(30000L, sendControlTemp);      // Sends temp to hvacMonitor via bridge for control
+  timer.setInterval(300000L, recordHighLowTemps);  // 'Last 24 hours' array and 'since midnight' variables updated ~5 minutes. TODO: find a way to make the array do both!
 }
 
 void loop()
@@ -119,15 +122,24 @@ void loop()
   timer.run();
   ArduinoOTA.handle();
 
-  if (hour() == 00 && minute() == 01)
-  {
-    timer.setTimeout(61000, resetHiLoTemps);
-  }
-
   if (ranOnce == false && year() != 1970) {
     Blynk.setProperty(V108, "label", String(hour()) + ":" + minute() + " " + month() + "/" + day() + " N1AT");
+    todaysDate = day();
+    lastMinute = minute();
     ranOnce = true;
   }
+
+  if (todaysDate != day()) {
+    timer.setTimeout(120000, resetHiLoTemps);
+  }
+}
+
+void sendControlTemp() {
+  bridge1.virtualWrite(V127, 1, tempHouse);    // Writing "1" for this node, then the temp.
+}
+
+BLYNK_CONNECTED() {
+  bridge1.setAuthToken("ed06ade587fc4dfea91fb114e08f2104"); // Place the AuthToken of the second hardware here
 }
 
 void disconnectWatcher() {
@@ -229,9 +241,9 @@ void uptimeSend()
 }
 
 void uptimeReport() {
-  if (second() > 1 && second() < 6)
-  {
+  if (lastMinute != minute()) {
     Blynk.virtualWrite(101, minute());
+    lastMinute = minute();
   }
 }
 
@@ -436,7 +448,7 @@ void recordHighLowTemps()
   }
 
   Blynk.setProperty(V3, "label", String("House ") + houseLast24high + "/" + houseLast24low);  // Sets label with high/low temps.
-  
+
   // ATTIC TEMPERATURES
   if (atticArrayIndex < 288)                   // Mess with array size and timing to taste!
   {
