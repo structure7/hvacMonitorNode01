@@ -5,18 +5,16 @@
 */
 
 #include <SimpleTimer.h>
-//#define BLYNK_PRINT Serial    // Comment this out to disable prints and save space
-#include <BlynkSimpleEsp8266.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
-#define ONE_WIRE_BUS 2        // ESP-01 GPIO 2
-#include <TimeLib.h>          // Used by WidgetRTC.h
-#include <WidgetRTC.h>
-
+#define BLYNK_PRINT Serial    // Comment this out to disable prints and save space
 #include <ESP8266mDNS.h>        // Required for OTA
 #include <WiFiUdp.h>            // Required for OTA
 #include <ArduinoOTA.h>         // Required for OTA
-
+#include <BlynkSimpleEsp8266.h>
+#include <TimeLib.h>          // Used by WidgetRTC.h
+#include <WidgetRTC.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#define ONE_WIRE_BUS 14        // WeMos D5
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
@@ -27,7 +25,12 @@ char auth[] = "fromBlynkApp";
 char ssid[] = "ssid";
 char pass[] = "pw";
 
-int buzzerPin = 0;              // ESP-01 GPIO 0
+SimpleTimer timer;
+WidgetTerminal terminal(V26);
+WidgetRTC rtc;
+WidgetBridge bridge1(V50);
+
+int buzzerPin = 12;             // WeMos D6
 bool alarmFlag;                 // TRUE if alarm is active. Allows for one alarm notification per instance.
 int dailyHouseHigh = 0;         // Kicks off with overly low high
 int dailyHouseLow = 200;        // Kicks off with overly high low
@@ -50,14 +53,9 @@ int atticLast24low = 200;               // Rolling high/low temps in last 24-hou
 int atticLast24hoursTemps[288];         // Last 24-hours temps recorded every 5 minutes.
 int atticArrayIndex = 0;
 
-bool blynkFlag;
-int blynkDisconnectCount;
+//bool blynkFlag;
+//int blynkDisconnectCount;
 bool ranOnce;
-
-SimpleTimer timer;
-WidgetTerminal terminal(V26);
-WidgetRTC rtc;
-WidgetBridge bridge1(V50);
 
 void setup()
 {
@@ -73,7 +71,7 @@ void setup()
   sensors.setResolution(ds18b20attic, 10);
 
   // START OTA ROUTINE
-  ArduinoOTA.setHostname("Node01AT-ESP01");
+  ArduinoOTA.setHostname("Node01AT-WeMosD1mini");
 
   ArduinoOTA.onStart([]() {
     Serial.println("Start");
@@ -107,11 +105,9 @@ void setup()
   timer.setTimeout(2000, vsync2);                   // Syncs back vPins to survive hardware reset
 
   timer.setInterval(1000L, sendAlarmStatus);
-  timer.setInterval(5432L, uptimeReport);
-  timer.setInterval(1001L, disconnectWatcher);     // Watches for a disconnect event
+  timer.setInterval(5000L, uptimeReport);
   timer.setInterval(2011L, sendHouseTemp);
   timer.setInterval(3432L, sendAtticTemp);
-  timer.setInterval(5000L, disconnectReporter);    // Reports disconnects to the app every 5 seconds
   timer.setInterval(30000L, sendControlTemp);      // Sends temp to hvacMonitor via bridge for control
   timer.setInterval(300000L, recordHighLowTemps);  // 'Last 24 hours' array and 'since midnight' variables updated ~5 minutes. TODO: find a way to make the array do both!
 }
@@ -140,20 +136,6 @@ void sendControlTemp() {
 
 BLYNK_CONNECTED() {
   bridge1.setAuthToken("ed06ade587fc4dfea91fb114e08f2104"); // Place the AuthToken of the second hardware here
-}
-
-void disconnectWatcher() {
-  if (Blynk.connected() == false && blynkFlag == false) {
-    ++blynkDisconnectCount;
-    blynkFlag = true;
-  }
-  else if (Blynk.connected() == true && blynkFlag == true) {
-    blynkFlag = false;
-  }
-}
-
-void disconnectReporter() {
-  Blynk.virtualWrite(V108, blynkDisconnectCount);
 }
 
 void vsync1()
@@ -490,23 +472,6 @@ void recordHighLowTemps()
   }
 
   Blynk.setProperty(V7, "label", String("Attic ") + atticLast24high + "/" + atticLast24low);  // Sets label with high/low temps.
-}
-
-BLYNK_WRITE(V19)
-{
-  int pinData = param.asInt();
-
-  if (pinData == 0)
-  {
-    Blynk.setProperty(V3, "label", String("House ") + houseLast24high + "/" + houseLast24low);
-    Blynk.setProperty(V7, "label", String("Attic ") + atticLast24high + "/" + atticLast24low);
-  }
-
-  if (pinData == 1)
-  {
-    Blynk.setProperty(V3, "label", String("House ") + dailyHouseHigh + "|" + dailyHouseLow);
-    Blynk.setProperty(V7, "label", String("Attic ") + dailyAtticHigh + "|" + dailyAtticLow);
-  }
 }
 
 void resetHiLoTemps()
