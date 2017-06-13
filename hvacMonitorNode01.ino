@@ -5,21 +5,21 @@
 */
 
 #include <SimpleTimer.h>
-#define BLYNK_PRINT Serial    // Comment this out to disable prints and save space
+#define BLYNK_PRINT Serial      // Comment this out to disable prints and save space
 #include <ESP8266mDNS.h>        // Required for OTA
 #include <WiFiUdp.h>            // Required for OTA
 #include <ArduinoOTA.h>         // Required for OTA
 #include <BlynkSimpleEsp8266.h>
-#include <TimeLib.h>          // Used by WidgetRTC.h
+#include <TimeLib.h>            // Used by WidgetRTC.h
 #include <WidgetRTC.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#define ONE_WIRE_BUS 14        // WeMos D5
+#define ONE_WIRE_BUS 14         // WeMos D5
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
 DeviceAddress ds18b20house = { 0x28, 0xFF, 0x35, 0x11, 0x01, 0x16, 0x04, 0x25 }; // House temperature probe
-DeviceAddress ds18b20attic = { 0x28, 0xC6, 0x89, 0x1E, 0x00, 0x00, 0x80, 0xAA }; // Attic temperature probe
+DeviceAddress ds18b20attic = { 0x28, 0xFF, 0xA3, 0x0B, 0x82, 0x16, 0x03, 0x28 }; // Attic temperature probe
 
 char auth[] = "fromBlynkApp";
 char ssid[] = "ssid";
@@ -30,7 +30,7 @@ WidgetTerminal terminal(V26);
 WidgetRTC rtc;
 WidgetBridge bridge1(V50);
 
-int buzzerPin = 12;             // WeMos D6
+int buzzerPin = 0;              // WeMos D3
 bool alarmFlag;                 // TRUE if alarm is active. Allows for one alarm notification per instance.
 int dailyHouseHigh = 0;         // Kicks off with overly low high
 int dailyHouseLow = 200;        // Kicks off with overly high low
@@ -53,9 +53,9 @@ int atticLast24low = 200;               // Rolling high/low temps in last 24-hou
 int atticLast24hoursTemps[288];         // Last 24-hours temps recorded every 5 minutes.
 int atticArrayIndex = 0;
 
-//bool blynkFlag;
-//int blynkDisconnectCount;
 bool ranOnce;
+//bool blynkConnected;
+long startupTime;
 
 void setup()
 {
@@ -107,7 +107,7 @@ void setup()
   timer.setInterval(1000L, sendAlarmStatus);
   timer.setInterval(5000L, uptimeReport);
   timer.setInterval(2011L, sendHouseTemp);
-  timer.setInterval(3432L, sendAtticTemp);
+  timer.setInterval(5012L, sendAtticTemp);
   timer.setInterval(30000L, sendControlTemp);      // Sends temp to hvacMonitor via bridge for control
   timer.setInterval(300000L, recordHighLowTemps);  // 'Last 24 hours' array and 'since midnight' variables updated ~5 minutes. TODO: find a way to make the array do both!
 }
@@ -119,14 +119,15 @@ void loop()
   ArduinoOTA.handle();
 
   if (ranOnce == false && year() != 1970) {
-    Blynk.setProperty(V108, "label", String(hour()) + ":" + minute() + " " + month() + "/" + day() + " N1AT");
     todaysDate = day();
     lastMinute = minute();
     ranOnce = true;
+    startupTime = now();
   }
 
   if (todaysDate != day()) {
     timer.setTimeout(120000, resetHiLoTemps);
+    todaysDate = day();
   }
 }
 
@@ -135,7 +136,7 @@ void sendControlTemp() {
 }
 
 BLYNK_CONNECTED() {
-  bridge1.setAuthToken("ed06ade587fc4dfea91fb114e08f2104"); // Place the AuthToken of the second hardware here
+  bridge1.setAuthToken(auth); // Place the AuthToken of the second hardware here
 }
 
 void vsync1()
@@ -191,7 +192,7 @@ BLYNK_WRITE(V30) {
 
 void notifyAndOff()
 {
-  Blynk.notify(String("House is ") + tempHouse + "°F. Alarm disabled until reset."); // Send notification.
+  Blynk.notify(String("House is ") + tempHouse + "F. Alarm disabled until reset."); // Send notification.
   Blynk.virtualWrite(V30, 1); // Rather than fancy timing, just disable alarm until reset.
 }
 
@@ -207,16 +208,20 @@ BLYNK_WRITE(V27) // App button to report uptime
 
 void uptimeSend()
 {
-  long minDur = millis() / 60000L;
-  long hourDur = millis() / 3600000L;
+  long minDur = (now() - startupTime) / 60L;
+  long hourDur = (now() - startupTime) / 3600L;
   if (minDur < 121)
   {
-    terminal.print(String("Node01 (AT): ") + minDur + " mins @ ");
+    terminal.print(String("Node01 (AT): ") + minDur + " min/");
+    terminal.print(WiFi.RSSI());
+    terminal.print("/");
     terminal.println(WiFi.localIP());
   }
   else if (minDur > 120)
   {
-    terminal.print(String("Node01 (AT): ") + hourDur + " hrs @ ");
+    terminal.print(String("Node01 (AT): ") + hourDur + " hrs/");
+    terminal.print(WiFi.RSSI());
+    terminal.print("/");
     terminal.println(WiFi.localIP());
   }
   terminal.flush();
